@@ -1,0 +1,264 @@
+# ##############################################################################
+project:
+  name: "MagicSquare"
+  description: "4x4 마방진(Magic Square) 판정/검증 체계. 임의의 4x4 숫자 배치에 대해 불변 조건(I1~I5) 충족 여부와 위반 유형을 결정적·반복적·자동적으로 판별한다."
+  language: "Python"
+  python_version: "3.10+"
+  paradigm: "TDD (Red-Green-Refactor)"
+  architecture_pattern: "ECB (Entity-Control-Boundary)"
+  invariants:
+    - "I1: 형태 불변성 — 입력은 항상 4행 4열 격자."
+    - "I2: 정의역 불변성 — 모든 원소는 정수 1~16."
+    - "I3: 유일성 불변성 — 1~16이 정확히 한 번씩 등장."
+    - "I4: 합 균질 불변성 — 모든 행/열/두 대각 합이 단일 상수."
+    - "I5: 판정 결정성 — 동일 입력은 항상 동일 판정."
+
+# ##############################################################################
+code_style:
+  python_version: "3.10+"
+  style_guide: "PEP 8 엄격 준수"
+  formatter: "Black"
+  linter: "Ruff (PEP 8 + pyflakes 규칙 포함)"
+  max_line_length: 88
+  type_hints:
+    required: true
+    scope: "모든 함수/메서드의 모든 파라미터와 반환값에 필수. Any 사용은 정당한 사유 주석 동반 시에만 허용."
+    enforcement: "mypy --strict 통과를 권장."
+  docstring:
+    style: "Google"
+    required_for: "모든 public 모듈, 클래스, 메서드, 함수."
+    must_include:
+      - "Args"
+      - "Returns"
+      - "Raises (예외를 의도적으로 발생시키는 경우)"
+  naming:
+    modules: "snake_case"
+    classes: "PascalCase"
+    functions: "snake_case"
+    constants: "UPPER_SNAKE_CASE"
+    private: "단일 언더스코어 접두사 (_name)"
+  imports:
+    order: "stdlib → third-party → local"
+    forbid_wildcard: true
+
+# ##############################################################################
+architecture:
+  pattern: "ECB (Entity-Control-Boundary)"
+  layers:
+    boundary:
+      role: "외부 입출력 담당. 사용자/외부 시스템과의 접점."
+      responsibilities:
+        - "CLI 입력 파싱 및 출력 포매팅"
+        - "REST/HTTP API 핸들러 (도입 시)"
+        - "파일/표준입출력 어댑터"
+      contains: "UI, API endpoint, CLI entrypoint, 외부 데이터 포맷 변환기"
+      may_depend_on: ["control", "entity"]
+      must_not:
+        - "비즈니스 규칙(마방진 판정 로직)을 직접 수행하지 않는다."
+        - "도메인 상태를 직접 변경하지 않는다."
+
+    control:
+      role: "비즈니스 로직 담당. 유스케이스/판정 흐름 조율."
+      responsibilities:
+        - "Boundary로부터 받은 요청을 Entity 검증으로 위임"
+        - "I1~I5 위반 유형 분류 및 판정 결과 조립"
+        - "유스케이스 단위 흐름 제어"
+      contains: "Validator, UseCase, Service, Coordinator"
+      may_depend_on: ["entity"]
+      must_not:
+        - "Boundary 계층에 의존하지 않는다 (의존 역전)."
+        - "외부 입출력(파일, 콘솔, 네트워크)을 직접 수행하지 않는다."
+
+    entity:
+      role: "도메인 데이터 및 규칙 담당. 마방진의 본질."
+      responsibilities:
+        - "Grid, Cell, MagicConstant 등 도메인 객체 정의"
+        - "I1~I5 불변 조건 자체의 정의"
+        - "도메인 값 객체의 동등성/불변성 보장"
+      contains: "Grid, Row, Column, Diagonal, ViolationType, MagicConstant"
+      may_depend_on: []
+      must_not:
+        - "어떠한 외부 계층에도 의존하지 않는다 (가장 안쪽 계층)."
+        - "I/O, 프레임워크, 로깅 등 부수 효과를 포함하지 않는다."
+
+  dependency_direction: "boundary → control → entity (단방향)"
+  dependency_rule: "안쪽 계층은 바깥 계층의 존재를 알지 못한다. 모든 의존은 안쪽을 향한다."
+
+# ##############################################################################
+tdd_rules:
+  red_phase:
+    description: "실패하는 테스트를 먼저 작성하고, 의도된 이유로 실패함을 확인한다."
+    rules:
+      - "프로덕션 코드보다 테스트 코드를 반드시 먼저 작성한다."
+      - "한 테스트는 단일 동작/단일 불변 조건만 검증한다."
+      - "테스트를 실행하여 assertion 실패임을 직접 확인한다."
+      - "실패 메시지가 위반된 규칙(I1~I5 등)을 식별 가능하게 작성한다."
+    must_not:
+      - "프로덕션 코드를 먼저 작성하거나 동시에 작성하지 않는다."
+      - "컴파일/임포트 에러로 인한 실패를 '의도된 RED'로 간주하지 않는다."
+      - "한 테스트에서 여러 동작을 한꺼번에 검증하지 않는다."
+      - "실패 확인 없이 green_phase로 넘어가지 않는다."
+
+  green_phase:
+    description: "현재 실패 중인 테스트를 통과시키기 위한 최소한의 코드만 작성한다."
+    rules:
+      - "오직 현재 실패 테스트를 통과시키는 데 필요한 코드만 작성한다."
+      - "하드코딩, 임시 분기, 중복 등 임시 구현이 허용된다 (refactor_phase에서 정리)."
+      - "변경 후 모든 테스트(신규+기존)가 통과(GREEN)임을 확인한다."
+    must_not:
+      - "리팩터링을 동시에 수행하지 않는다."
+      - "현재 테스트와 무관한 새로운 기능을 추가하지 않는다."
+      - "추가 테스트 케이스를 동시에 작성하지 않는다."
+      - "공개 API의 시그니처를 합의 없이 변경하지 않는다."
+
+  refactor_phase:
+    description: "외부 동작을 변경하지 않고 코드 구조와 가독성을 개선한다."
+    rules:
+      - "공개 API/입출력 동작을 보존한다."
+      - "중복 제거, 명명 개선, 함수 분해, 계층 정리만 수행한다."
+      - "리팩터링 도중 매 단계에서 모든 테스트가 통과 상태를 유지해야 한다."
+      - "리팩터링 전후의 테스트 커버리지가 떨어지지 않아야 한다."
+    must_not:
+      - "새로운 기능이나 새로운 테스트 케이스를 추가하지 않는다."
+      - "외부 관찰 가능한 동작을 변경하지 않는다."
+      - "테스트가 한 번이라도 실패하는 중간 상태를 커밋/유지하지 않는다."
+      - "ECB 계층 경계를 위반하는 방향으로 구조를 변경하지 않는다."
+
+# ##############################################################################
+testing:
+  framework: "pytest"
+  pattern: "AAA (Arrange-Act-Assert)"
+  coverage:
+    minimum: 80
+    measurement_tool: "pytest-cov"
+    fail_under: true
+  fixture_scope:
+    default: "function"
+    rules:
+      - "기본은 function 스코프. 테스트 간 독립성을 최우선으로 한다."
+      - "비용이 큰 setup(파일 로딩, 외부 리소스)에 한해 module/session 스코프 허용."
+      - "공유 가변 상태를 가지는 fixture는 절대 session 스코프로 두지 않는다."
+      - "공통 fixture는 conftest.py에 위치시키고, 적용 범위를 주석으로 명시한다."
+  naming_convention:
+    file_prefix: "test_"
+    function_prefix: "test_"
+    pattern: "test_<대상>_<상황>_<기대결과>"
+    example: "test_grid_with_duplicated_value_returns_I3_violation"
+  layout:
+    structure: "AAA 블록 사이에 빈 줄 1줄로 시각적 구분."
+    one_assert_focus: "하나의 테스트는 하나의 동작을 검증한다 (보조 assert는 허용)."
+  parametrize: "동일 동작·다른 입력은 pytest.mark.parametrize 사용."
+  invariant_mapping:
+    rule: "각 테스트의 docstring 또는 ID에 검증 대상 불변 조건(I1~I5)을 명시한다."
+
+# ##############################################################################
+forbidden:
+  - pattern: "print()"
+    reason: "프로덕션 코드의 디버그 출력은 관측 불가/제어 불가한 부수 효과를 만든다."
+    alternative: "logging 모듈 사용. 레벨별 로거(logger.debug/info/warning/error)로 분리."
+
+  - pattern: "하드코딩된 매직 넘버/문자열 (예: 4, 16, 34를 코드에 직접 기입)"
+    reason: "도메인 상수가 코드 전체에 흩어지면 변경 시 누락이 발생하고 의미가 사라진다."
+    alternative: "entity 계층의 상수 모듈 또는 Enum/Final 상수로 정의 (GRID_SIZE=4, VALUE_RANGE=range(1,17), MAGIC_CONSTANT=34)."
+
+  - pattern: "except: 단독 사용 (bare except)"
+    reason: "KeyboardInterrupt/SystemExit까지 잡아 시스템 안정성을 해치고, 실패 원인을 은폐한다."
+    alternative: "구체적 예외 타입 명시 (except ValueError as e:). 광범위 처리가 불가피하면 except Exception as e: + 재발생/로깅."
+
+  - pattern: "가변 기본 인자 (def f(x=[]):)"
+    reason: "기본값이 함수 객체에 한 번만 생성되어 호출 간 상태가 누적된다."
+    alternative: "def f(x=None): if x is None: x = []"
+
+  - pattern: "from module import *"
+    reason: "네임스페이스 오염, 정적 분석 곤란, 의존 추적 불가."
+    alternative: "필요 심볼 명시적 import."
+
+  - pattern: "비즈니스 로직 내부의 직접 I/O (open, input, requests 등)"
+    reason: "control/entity 계층에 부수 효과가 침투하면 ECB 경계가 무너지고 테스트가 어려워진다."
+    alternative: "boundary 계층으로 격리하고, control/entity는 순수 함수/순수 객체로 유지."
+
+  - pattern: "eval() / exec()"
+    reason: "임의 코드 실행 경로를 만들어 보안·예측 가능성·정적 검증 가능성을 모두 훼손한다."
+    alternative: "명시적 파서/매핑/디스패치 테이블 사용."
+
+# ##############################################################################
+file_structure:
+  description: "ECB 계층을 폴더로 1:1 매핑한다. tests/도 동일 구조를 미러링한다."
+  tree: |
+    MagicSquare_XX/
+    ├── .cursorrules                  # 본 파일 (프로젝트 규약)
+    ├── pyproject.toml                # 빌드/의존성/도구 설정 (Black, Ruff, mypy, pytest)
+    ├── README.md
+    ├── src/
+    │   └── magicsquare/
+    │       ├── __init__.py
+    │       │
+    │       ├── boundary/             # 외부 입출력 (UI, CLI, API)
+    │       │   ├── __init__.py
+    │       │   ├── cli.py            # CLI entrypoint
+    │       │   └── formatters.py     # 결과 포맷터
+    │       │
+    │       ├── control/              # 비즈니스 로직 / 유스케이스
+    │       │   ├── __init__.py
+    │       │   ├── validator.py      # I1~I5 검증 흐름 조율
+    │       │   └── use_cases.py      # 마방진 판정 유스케이스
+    │       │
+    │       └── entity/               # 도메인 모델 / 불변 규칙
+    │           ├── __init__.py
+    │           ├── grid.py           # Grid, Row, Column, Diagonal
+    │           ├── invariants.py     # I1~I5 정의
+    │           └── violation.py      # ViolationType, ViolationReport
+    │
+    ├── tests/                        # src/ 구조를 미러링
+    │   ├── __init__.py
+    │   ├── conftest.py               # 공통 fixture
+    │   ├── boundary/
+    │   │   └── test_cli.py
+    │   ├── control/
+    │   │   ├── test_validator.py
+    │   │   └── test_use_cases.py
+    │   └── entity/
+    │       ├── test_grid.py
+    │       ├── test_invariants.py
+    │       └── test_violation.py
+    │
+    ├── Prompt/                       # 단계별 프롬프트 자료
+    └── Report/                       # 단계별 산출 보고서
+
+# ##############################################################################
+ai_behavior:
+  before_generating_code:
+    - "변경 대상 모듈에 대응하는 tests/ 하위 테스트 파일을 먼저 확인한다. 없다면 그 사실을 사용자에게 알린다."
+    - "수정/생성하려는 코드가 어느 ECB 계층(boundary/control/entity)에 속하는지 명시한다."
+    - "해당 계층의 의존 방향(boundary→control→entity)을 위반하지 않는지 검토한다."
+    - "현재 단계가 TDD의 어느 phase(red/green/refactor)인지 사용자와 합의한다."
+    - "관련된 불변 조건(I1~I5) 중 어느 것을 다루는 작업인지 식별한다."
+
+  during_code_generation:
+    - "모든 함수/메서드 시그니처에 타입 힌트를 부여한다. 누락된 타입 힌트가 발생하면 즉시 보강한다."
+    - "모든 public API에 Google 스타일 docstring을 추가한다."
+    - "ECB 계층 경계를 넘는 import는 의존 방향(안쪽으로만)에 부합할 때만 작성한다. 위반 시 작성을 중단하고 경고한다."
+    - "forbidden 목록의 패턴을 코드에 도입하지 않는다. 부득이한 경우 alternative를 우선 시도한다."
+    - "green_phase 중에는 리팩터링/추가 기능/추가 테스트를 함께 작성하지 않는다."
+    - "refactor_phase 중에는 외부 동작 변경/새 기능 추가/새 테스트 추가를 하지 않는다."
+
+  after_code_generation:
+    - "방금 변경한 파일에 대해 lint/타입체크/테스트 실행 명령을 사용자에게 제시하거나 직접 실행한다."
+    - "테스트가 실제로 RED→GREEN 또는 GREEN→GREEN으로 전이했는지 출력으로 확인한다."
+    - "리팩터링이었다면 커버리지가 떨어지지 않았는지 확인한다."
+    - "변경된 파일이 ECB 폴더 구조(file_structure.tree)와 일치하는지 점검한다."
+
+  warnings:
+    - condition: "tdd_rules 위반 (예: 테스트 없이 프로덕션 코드 추가, green 단계 중 리팩터링)"
+      action: "코드 적용을 중단하고, 어떤 phase의 어떤 규칙을 위반하는지 사용자에게 명시적으로 경고한다."
+    - condition: "ECB 의존 방향 위반 (예: entity가 boundary를 import)"
+      action: "작성을 중단하고, 위반 라인과 권장 리팩터링 방향을 보고한다."
+    - condition: "타입 힌트 누락"
+      action: "해당 함수의 추가/수정을 거부하고 타입 힌트 보강을 먼저 요구한다."
+    - condition: "forbidden 패턴 도입 시도"
+      action: "도입을 거부하고 forbidden 항목의 alternative를 제안한다."
+
+  honesty:
+    - "테스트를 직접 실행하지 않은 상태에서 'GREEN을 확인했다'고 단정하지 않는다."
+    - "커버리지 수치는 도구 실행 결과로만 보고한다 (추정 금지)."
+    - "I1~I5 매핑이 불확실한 변경에는 그 사실을 명시한다."
