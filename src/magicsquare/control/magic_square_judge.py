@@ -1,19 +1,24 @@
 """Magic square judgement (FR-04, Track B).
 
 본 모듈은 채워진 4x4 격자가 *마방진 정의(I4)* 를 만족하는지 판정하는
-``is_magic_square`` 함수의 *공개 시그니처 stub*만 둔다. 비즈니스 로직 0줄
-— 본 모듈의 존재 이유는 *T-D-001 RED 테스트의 컬렉션 실패 회피*에
-한정된다 (TC-Spec §6.1 ①).
+``is_magic_square`` 함수를 제공한다. T-D-001 GREEN — 표준 Dürer 마방진
+(D-Std) 입력에 대해 ``True`` 를 반환하는 *최소 구현*.
 
-Public API (계약 합의 — TC-Spec §4.2 전제조건 1):
+Public API (계약 — TC-Spec §4.2):
     is_magic_square(board) -> bool
         모든 행/열/두 대각의 합이 ``MAGIC_CONSTANT`` (= 34) 와 일치하면
         ``True`` 반환. 그렇지 않으면 ``False``.
 
+상수 정책 (D-4 — 본 사이클 결정):
+    ``GRID_SIZE`` / ``MAGIC_CONSTANT`` 는 *지역 ``Final[int]``* 로 둔다.
+    ``entity/constants.py`` 로의 추출은 후속 RED 사이클 (TASK-020-1) 또는
+    본 사이클 REFACTOR 단계에서 결정한다 (NFR-06 매직 넘버 금지 + ruff
+    PLR2004 회피).
+
 Constraints (.cursorrules + PRD §8.2):
     - Boundary 호출 금지 (DT-5 / BR-17 / NFR-09).
-    - 입력 행렬 변경 금지 (BR-16 — T-D-008 회귀).
-    - 결정성 100회 동일 결과 (BR-15 — T-D-009 회귀).
+    - 입력 행렬 변경 금지 (BR-16 — T-D-008 회귀 보호).
+    - 결정성 100회 동일 결과 (BR-15 — T-D-009 회귀 보호).
 
 See Also:
     - ``docs/PRD.md`` §5 FR-04, §6 BR-05·06
@@ -22,9 +27,14 @@ See Also:
 
 from __future__ import annotations
 
+from typing import Final
+
+GRID_SIZE: Final[int] = 4
+MAGIC_CONSTANT: Final[int] = 34
+
 
 def is_magic_square(board: list[list[int]]) -> bool:
-    """4x4 격자의 마방진 여부 판정 — *stub*.
+    """4x4 격자의 마방진 여부 판정.
 
     Args:
         board: 판정 대상 4x4 정수 격자. 본 함수의 사전조건은
@@ -33,11 +43,18 @@ def is_magic_square(board: list[list[int]]) -> bool:
 
     Returns:
         모든 행/열/두 대각의 합이 ``34`` 와 일치하면 ``True``, 아니면 ``False``.
-
-    Note:
-        본 함수는 *RED 테스트가 import에 성공하도록 두기 위한* stub이다.
-        호출 시 ``NotImplementedError``를 raise하며, 이는 ``T-D-001``의
-        ``assert ... is True`` 단정을 ``AssertionError``로 실패시키는
-        *의도된 RED 사유*다 (PRD §8.3 DT-3).
     """
-    raise NotImplementedError
+    for row in board:
+        if sum(row) != MAGIC_CONSTANT:
+            return False
+
+    for c in range(GRID_SIZE):
+        if sum(board[r][c] for r in range(GRID_SIZE)) != MAGIC_CONSTANT:
+            return False
+
+    main_diag_sum = sum(board[i][i] for i in range(GRID_SIZE))
+    if main_diag_sum != MAGIC_CONSTANT:
+        return False
+
+    anti_diag_sum = sum(board[i][GRID_SIZE - 1 - i] for i in range(GRID_SIZE))
+    return anti_diag_sum == MAGIC_CONSTANT
