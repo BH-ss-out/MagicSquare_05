@@ -1,0 +1,105 @@
+# ##############################################################################
+# CI — Magic Square (PRD §13.3 — All Stages 1~5)
+#
+# 본 워크플로는 PRD §13.2 OG-1 ~ OG-14를 PR/Push마다 결정적으로 강제한다.
+# 로컬 pre-commit과 *동일 게이트 집합*을 실행한다 (OPS-1).
+# 게이트 일시 비활성화 금지 (OPS-4).
+# 임계값 변경은 NFR 약화 방향 금지 (OPS-2).
+# ##############################################################################
+
+name: "CI — PRD §13.3 (5-Stage)"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    # OR-4 대응: CI 매트릭스를 *최소화*하여 환경 차이로 인한 비결정 회귀 방지.
+    # 향후 매트릭스 확장 시 OPS-5 결정성 검증 우선 통과 필요.
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # OG-13(혼합 커밋 검사) 향후 활성화에 대비
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # ========================================================================
+      # Stage 1: Static — OG-1 → OG-2 → OG-3
+      # ========================================================================
+
+      - name: "OG-1 — Black format check"
+        run: black --check src tests
+
+      - name: "OG-2 — Ruff lint (PLR2004 incl.)"
+        run: ruff check src tests
+
+      - name: "OG-2 — Ruff format check"
+        run: ruff format --check src tests
+
+      - name: "OG-3 — mypy --strict"
+        run: mypy src
+
+      # ========================================================================
+      # Stage 2: Test — OG-4 → OG-5 → OG-6
+      # ※ 초기 상태(테스트 0건, exit code 5)는 한시적으로만 허용된다.
+      #   첫 RED 커밋 직후 본 블록의 `|| [ "$EXIT" -eq 5 ]` 우회를 *제거*해야 한다.
+      #   (OPS-4 정신 — 우회는 일시적이며, 첫 RED 커밋과 동일 PR에서 닫는다.)
+      # ========================================================================
+
+      - name: "OG-4/OG-5/OG-6 — pytest + coverage"
+        run: |
+          set +e
+          pytest
+          EXIT=$?
+          set -e
+          if [ "$EXIT" -eq 0 ]; then
+            echo "OG-4/OG-5/OG-6: PASS"
+          elif [ "$EXIT" -eq 5 ]; then
+            echo "::warning::pytest collected 0 tests (initial scaffold state)."
+            echo "::warning::Add the first RED test (T-U-001 or T-D-001) to remove this allowance."
+          else
+            echo "::error::pytest failed with exit code $EXIT"
+            exit $EXIT
+          fi
+
+      # ========================================================================
+      # Stage 3: Invariant — OG-7 → OG-8 → OG-10 → OG-11
+      # ========================================================================
+      # OG-7 (결정성 100회 반복): T-INV-I5 / 마커 `invariant`로 자동 수집.
+      # OG-8 (부작용 금지): T-INV-BR16 / deep-copy 단정.
+      # OG-10 (메시지 byte-equal): 표준 메시지 5종 동등성 단정.
+      # OG-11 (Property): Hypothesis 기반 P-01 ~ P-08 — *opt-strict* 도입 후 활성화.
+      #
+      # 위 4 게이트는 전용 RED 테스트가 작성된 시점부터 자동으로 OG-4 안에서 실행된다.
+      # 별도 step은 *향후 확장 슬롯*으로 비워둔다.
+
+      # ========================================================================
+      # Stage 4: Architecture — OG-9 → OG-12 → OG-13
+      # ========================================================================
+      # OG-9 (의존성 방향): import-linter (`opt-strict` 도입 후 활성화).
+      # OG-12 (Traceability): scripts/check_traceability.py (TODO).
+      # OG-13 (혼합 커밋): scripts/check_phase_commit.py (TODO).
+      #
+      # 본 Stage는 도구 도입 PR(OPS-3)에서 단계적으로 활성화된다.
+
+      # ========================================================================
+      # Stage 5: Performance — OG-14 (참고용, 차단성은 NFR-05 정책)
+      # ========================================================================
+      # pytest-benchmark 기반 P95 ≤ 50ms (FR-05 단일 호출).
+      # 회귀 발견 시 RED 추가 (즉시 차단은 아님).

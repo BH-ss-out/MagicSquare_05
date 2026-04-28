@@ -1,0 +1,53 @@
+# ##############################################################################
+# Pre-commit Hooks — Stage 1 (Static) of PRD §13.3
+#
+# 본 파일은 PRD §13.2 OG-1, OG-2, OG-3을 *로컬에서* 강제한다.
+# CI(.github/workflows/ci.yml)는 동일 게이트 + Stage 2~5를 추가 실행한다 (OPS-1).
+#
+# 임의 비활성화 금지 (OPS-4). 도구 교체 시 OG-12 동등 보호 수준 검증 필요 (§13.7).
+# ##############################################################################
+
+repos:
+  # OG-1 — Black: 코드 포맷
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        name: "OG-1 Black format"
+        language_version: python3.10
+
+  # OG-2 — Ruff: PEP 8 + pyflakes + PLR2004 매직 넘버 (NFR-06 보호)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        name: "OG-2 Ruff lint (PLR2004 incl.)"
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: "OG-2 Ruff format check"
+
+  # OG-3 — mypy: --strict 동치 (.cursorrules type_hints.enforcement)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: "OG-3 mypy --strict"
+        files: ^src/
+        args: [--config-file=pyproject.toml]
+        additional_dependencies: []
+
+  # 소소한 위생: trailing whitespace, EOF newline, large files 차단
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+
+# 기본 stage = commit. push 단계에서만 무거운 검사를 추가하려면 default_stages 조정.
+default_stages: [pre-commit]
+fail_fast: false  # 모든 게이트 결과를 한 번에 보여줌
