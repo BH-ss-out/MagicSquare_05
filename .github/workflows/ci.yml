@@ -57,26 +57,16 @@ jobs:
 
       # ========================================================================
       # Stage 2: Test — OG-4 → OG-5 → OG-6
-      # ※ 초기 상태(테스트 0건, exit code 5)는 한시적으로만 허용된다.
-      #   첫 RED 커밋 직후 본 블록의 `|| [ "$EXIT" -eq 5 ]` 우회를 *제거*해야 한다.
-      #   (OPS-4 정신 — 우회는 일시적이며, 첫 RED 커밋과 동일 PR에서 닫는다.)
+      # ※ DT-1 한 쌍(T-U-001 + T-D-001)이 박제된 시점부터 본 step은 *결정적
+      #   차단성*을 갖는다. EXIT==5 (테스트 0건) 한시 허용은 *닫혔다* (OPS-4).
+      #
+      # RED 단계: pytest는 *의도된 실패*로 비-0 종료한다. CI 또한 *의도된 RED를
+      #   PR 단위로 차단*하여 GREEN 사이클(DT-2)이 *별도 PR*로 진입하도록
+      #   강제한다 (DT-6 / OPS-3).
       # ========================================================================
 
       - name: "OG-4/OG-5/OG-6 — pytest + coverage"
-        run: |
-          set +e
-          pytest
-          EXIT=$?
-          set -e
-          if [ "$EXIT" -eq 0 ]; then
-            echo "OG-4/OG-5/OG-6: PASS"
-          elif [ "$EXIT" -eq 5 ]; then
-            echo "::warning::pytest collected 0 tests (initial scaffold state)."
-            echo "::warning::Add the first RED test (T-U-001 or T-D-001) to remove this allowance."
-          else
-            echo "::error::pytest failed with exit code $EXIT"
-            exit $EXIT
-          fi
+        run: pytest
 
       # ========================================================================
       # Stage 3: Invariant — OG-7 → OG-8 → OG-10 → OG-11
