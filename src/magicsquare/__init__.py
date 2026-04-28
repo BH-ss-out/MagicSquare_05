@@ -1,7 +1,8 @@
 """Magic Square (4x4) — TDD 학습 프로젝트의 최상위 패키지.
 
 본 패키지는 PRD §10에 정의된 *2-Track 아키텍처*(Boundary / Domain)를
-``.cursorrules`` ``architecture.layers``의 3계층(Boundary / Control / Entity)으로 매핑한다.
+``.cursorrules`` ``architecture.layers`` 가 정의한 3계층
+(Boundary / Control / Entity)으로 매핑한다.
 
 Subpackages:
     boundary: 외부 호출자와의 입출력 경계. PRD §8.1 Track A의 책임 영역.
