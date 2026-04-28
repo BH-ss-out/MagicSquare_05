@@ -9,11 +9,9 @@ Public API (계약 — TC-Spec §4.2):
         모든 행/열/두 대각의 합이 ``MAGIC_CONSTANT`` (= 34) 와 일치하면
         ``True`` 반환. 그렇지 않으면 ``False``.
 
-상수 정책 (D-4 — 본 사이클 결정):
-    ``GRID_SIZE`` / ``MAGIC_CONSTANT`` 는 *지역 ``Final[int]``* 로 둔다.
-    ``entity/constants.py`` 로의 추출은 후속 RED 사이클 (TASK-020-1) 또는
-    본 사이클 REFACTOR 단계에서 결정한다 (NFR-06 매직 넘버 금지 + ruff
-    PLR2004 회피).
+상수 정책 (D-4 — REFACTOR 사이클로 SSOT 일원화 완료):
+    ``GRID_SIZE`` 와 ``MAGIC_CONSTANT`` 는 ``entity.constants`` 의 단일 진실
+    출처를 import 한다 (NFR-06 매직 넘버 금지 + ruff PLR2004 회피).
 
 Constraints (.cursorrules + PRD §8.2):
     - Boundary 호출 금지 (DT-5 / BR-17 / NFR-09).
@@ -27,10 +25,7 @@ See Also:
 
 from __future__ import annotations
 
-from typing import Final
-
-GRID_SIZE: Final[int] = 4
-MAGIC_CONSTANT: Final[int] = 34
+from magicsquare.entity.constants import GRID_SIZE, MAGIC_CONSTANT
 
 
 def is_magic_square(board: list[list[int]]) -> bool:
